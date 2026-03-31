@@ -110,11 +110,11 @@ int bip_send_pdu(BACNET_ADDRESS* dest,
     int result = esp32_udp_send(dest_ip, dest_port, buf, offset);
 
     // Debugging output for packet tracing
-    printf("bip_send_pdu: dest=%u.%u.%u.%u:%u len=%d result=%d\n",
+    /*printf("bip_send_pdu: dest=%u.%u.%u.%u:%u len=%d result=%d\n",
         dest_ip & 0xFF, (dest_ip>>8)&0xFF,
         (dest_ip>>16)&0xFF, (dest_ip>>24)&0xFF,
         dest_port, offset, result);
-
+    */
     return result;
 }
 

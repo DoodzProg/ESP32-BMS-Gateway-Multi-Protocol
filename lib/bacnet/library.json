@@ -15,6 +15,7 @@
       "+<datalink/bip-esp32.c>",
       "+<basic/object/av.c>",
       "+<basic/object/bv.c>",
+      "-<secure_connect.c>",
       "-<basic/object/client/>",
       "-<basic/object/gateway/>",
       "-<basic/program/>",
