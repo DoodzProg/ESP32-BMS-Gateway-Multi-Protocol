@@ -4,22 +4,27 @@
  * @details     Contains pin mappings, network parameters, and protocol register/instance maps.
  * @author      Doodz (DoodzProg)
  * @date        2026-04-04
- * @version     1.0.0
+ * @version     1.0.1
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 
 #pragma once
 
 // ==============================================================================
-// HARDWARE CONFIGURATION
+// HARDWARE NOTES (YD-ESP32-S3 N16R8)
 // ==============================================================================
-
-/**
- * @brief Built-in LED pin.
- * @note Set to 16 for the YD-ESP32-S3 N16R8 board used in this project.
- * Update this value to match your specific hardware variant if different.
- */
-#define LED_PIN 16
+//
+// LED layout (hardware-wired, not software-controllable):
+//   - Red  LED : power indicator (always on when board is powered)
+//   - Blue LED : USB activity / flashing indicator
+//   - Green LED: GPIO activity (faint blink on GPIO transitions)
+//   There is no general-purpose LED controllable from firmware without
+//   hardware modifications. Status is observable via Serial and the Web UI.
+//
+// BOOT button (GPIO 0):
+//   - Available on the board, confirmed functional (reads LOW when pressed,
+//     pull-up internal). Reserved for future use (e.g., factory reset trigger).
+//   - Not used in v1.0.1.
 
 // ==============================================================================
 // NETWORK & BACNET CONFIGURATION

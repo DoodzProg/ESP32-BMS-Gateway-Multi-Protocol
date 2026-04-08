@@ -22,7 +22,7 @@
  *
  * @author      Doodz (DoodzProg)
  * @date        2026-04-04
- * @version     1.0.0
+ * @version     1.0.1
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 

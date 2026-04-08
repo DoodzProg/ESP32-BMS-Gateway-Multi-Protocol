@@ -6,7 +6,7 @@
  * Important: State loading via JSON must occur before protocol initialization.
  * @author      Doodz (DoodzProg)
  * @date        2026-04-04
- * @version     1.0.0
+ * @version     1.0.1
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 
@@ -15,7 +15,6 @@
 #include <ESPmDNS.h>      // Local DNS resolution (bms-gateway.local)
 #include <Preferences.h>  // Non-volatile memory (NVRAM) for network configuration
 #include "secrets.h"
-#include "config.h"       // Keep this for hardware defines like LED_PIN
 #include "state.h"
 
 // Conditional includes based on platformio.ini flags
@@ -47,8 +46,6 @@ extern volatile bool pendingReboot;
 // ==============================================================================
 void setup() {
     Serial.begin(115200);
-    pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, HIGH);
 
     // 1. Initialize NVRAM and read parameters silently
     Preferences pref;
@@ -170,13 +167,7 @@ void loop() {
     bacnet_update_objects();
 #endif
 
-    // 3. Hardware Feedback (Status LED based on first binary point if it exists)
-    if (NUM_BINARY_POINTS > 0) {
-        // Assuming LOW triggers the LED on this specific board
-        digitalWrite(LED_PIN, binaryPoints[0].value ? LOW : HIGH);
-    }
-
-    // 4. Safe Reboot Handling (Triggered by Web UI modifications)
+    // 3. Safe Reboot Handling (Triggered by Web UI modifications)
     if (pendingReboot) {
         Serial.println("\n[SYSTEM] Configuration changed by Web UI. Executing Safe Reboot...");
         delay(500); // Give the TCP socket a moment to flush the 200 OK response

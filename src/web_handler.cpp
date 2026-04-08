@@ -7,7 +7,7 @@
  * (point creation, deletion, value writes, layout changes) are immediately
  * persisted to /config.json via state_save_to_json() to survive hard resets.
  *
- * ### API Surface (v1.0.0)
+ * ### API Surface (v1.0.1)
  *
  * | Method | Endpoint              | Description                                      |
  * |--------|-----------------------|--------------------------------------------------|
@@ -25,7 +25,7 @@
  *
  * @author      Doodz (DoodzProg)
  * @date        2026-04-04
- * @version     1.0.0
+ * @version     1.0.1
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 
@@ -124,6 +124,7 @@ static void _remove_point_from_sections(const char* pointName) {
 // GET /api/data — Live Telemetry Polling
 // ==============================================================================
 
+/** @brief Sends live telemetry (current values + RAM stats) for all configured points. */
 void handleData() {
     String json = "{";
 
@@ -163,6 +164,7 @@ void handleData() {
 // GET /api/system — Network Configuration
 // ==============================================================================
 
+/** @brief Returns current network configuration, active mode, and device/client IP addresses. */
 void handleSystem() {
     Preferences pref;
     pref.begin("bms-app", true);
@@ -190,6 +192,7 @@ void handleSystem() {
 // GET /api/config — Full Configuration Export
 // ==============================================================================
 
+/** @brief Exports the complete point definition list and dashboard section layout as JSON. */
 void handleGetConfig() {
     DynamicJsonDocument doc(8192);
 
@@ -236,6 +239,7 @@ void handleGetConfig() {
 // POST /api/config/layout — Persist Dashboard Layout
 // ==============================================================================
 
+/** @brief Persists a new dashboard section order and column sizes from the web UI to LittleFS. */
 void handlePostLayout() {
     DynamicJsonDocument doc(4096);
     if (!_parse_body(doc)) return;
@@ -384,6 +388,7 @@ void handleAddPoint() {
 // POST /api/point/update — Modify Point Metadata
 // ==============================================================================
 
+/** @brief Updates metadata (name, Modbus address, BACnet instance, scale, protocol) for an existing point. */
 void handleUpdatePoint() {
     DynamicJsonDocument doc(1024);
     if (!_parse_body(doc)) return;
@@ -464,6 +469,7 @@ void handleUpdatePoint() {
 // POST /api/point/delete — Remove a Point
 // ==============================================================================
 
+/** @brief Removes a named point from the state registry and all dashboard sections, then persists the change. */
 void handleDeletePoint() {
     DynamicJsonDocument doc(256);
     if (!_parse_body(doc)) return;
@@ -578,6 +584,7 @@ void handleWritePoint() {
 // GET /api/point/check — Address Conflict Validation
 // ==============================================================================
 
+/** @brief Validates Modbus and BACnet address availability before committing a new or updated point. */
 void handleCheckAddress() {
     String type = server.arg("type");
     bool modbusOk = true;
@@ -626,6 +633,7 @@ void handleCheckAddress() {
 // GET /api/scan — Wi-Fi Network Scan
 // ==============================================================================
 
+/** @brief Scans surrounding Wi-Fi networks and returns an array of SSIDs with their RSSI values. */
 void handleScan() {
     int currentMode = WiFi.getMode();
     if (currentMode == WIFI_AP) WiFi.mode(WIFI_AP_STA);
@@ -646,6 +654,7 @@ void handleScan() {
 // GET /api/switch_network — Credential Persist & Reboot
 // ==============================================================================
 
+/** @brief Persists new network credentials (STA or AP mode) to NVRAM and triggers a safe reboot. */
 void handleSwitchNetwork() {
     String mode = server.arg("mode");
     Preferences pref;

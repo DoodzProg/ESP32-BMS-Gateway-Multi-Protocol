@@ -1,6 +1,6 @@
 # ESP32 Multi-Protocol BMS Gateway
 
-[![Version](https://img.shields.io/badge/Version-v1.0.0-brightgreen.svg)](https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/releases/tag/v1.0.0)
+[![Version](https://img.shields.io/badge/Version-v1.0.1-brightgreen.svg)](https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/releases/tag/v1.0.1)
 [![Platform](https://img.shields.io/badge/Platform-ESP32--S3-blue.svg)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Framework](https://img.shields.io/badge/Framework-Arduino%20%7C%20PlatformIO-00979D.svg)](https://platformio.org/)
 [![BACnet/IP](https://img.shields.io/badge/BACnet%2FIP-Port_47808-4A90D9.svg)](https://github.com/bacnet-stack/bacnet-stack)
@@ -24,6 +24,7 @@
 - [Usage & Configuration](#usage--configuration)
 - [Architecture](#architecture)
 - [Protocol Reference](#protocol-reference)
+- [Developer Documentation](#developer-documentation)
 - [License & Author](#license--author)
 
 ---
@@ -256,8 +257,12 @@ ESP32-BMS-Gateway-Multi-Protocol/
 ├── lib/
 │   └── bacnet/                 ← Vendored C BACnet stack, optimized for embedded targets
 │
-├── docs/                       ← GitHub Pages — ESP Web Tools flash interface
+├── docs/                       ← GitHub Pages — ESP Web Tools flash interface + release binaries
+│   ├── BUILD_RELEASE.md        ← Release binary build procedure
+│   └── PARTITION_LAYOUT.md     ← Partition table with offsets and sizes
 │
+├── CHANGELOG.md                ← Version history
+├── CONTRIBUTING.md             ← Build guide, code conventions, PR checklist
 └── platformio.ini              ← Build config: 16 MB flash layout, partition table, build flags
 ```
 
@@ -302,6 +307,17 @@ Web Dashboard        ──► web_handler.cpp    ──┘
 ### REST API
 
 The web dashboard communicates with the firmware over a lightweight JSON REST API on port `80`. All endpoints can be called directly with `curl` or any HTTP client for scripting and integration testing.
+
+---
+
+## Developer Documentation
+
+| Document | Description |
+| :--- | :--- |
+| [CHANGELOG.md](CHANGELOG.md) | Full version history — what changed and why in every release. |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Build prerequisites, code style rules, and pull-request checklist. |
+| [docs/BUILD_RELEASE.md](docs/BUILD_RELEASE.md) | Step-by-step procedure for building and publishing release binaries. |
+| [docs/PARTITION_LAYOUT.md](docs/PARTITION_LAYOUT.md) | Flash partition table with offsets, sizes, and role descriptions. |
 
 ---
 

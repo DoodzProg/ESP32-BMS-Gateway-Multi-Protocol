@@ -9,5 +9,7 @@ include/secrets.h
 *.bin
 *.elf
 *.map
+
+# Fichiers d'installation WEB
 !docs/*.bin
 !docs/*.json

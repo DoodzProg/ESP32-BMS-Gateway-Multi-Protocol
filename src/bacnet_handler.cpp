@@ -285,7 +285,8 @@ void bacnet_init(IPAddress ip) {
 
     bip_set_port(BACNET_PORT);
     
-    BACNET_IP_ADDRESS local_addr = {0}; 
+    BACNET_IP_ADDRESS local_addr;
+    memset(&local_addr, 0, sizeof(local_addr));
     local_addr.address[0] = ip[0];
     local_addr.address[1] = ip[1];
     local_addr.address[2] = ip[2];
