@@ -1,6 +1,6 @@
 # ESP32 Multi-Protocol BMS Gateway
 
-[![Version](https://img.shields.io/badge/Version-v1.1.0-brightgreen.svg)](https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/releases/tag/v1.1.0)
+[![Version](https://img.shields.io/badge/Version-v1.2.0-brightgreen.svg)](https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/releases/tag/v1.2.0)
 [![Platform](https://img.shields.io/badge/Platform-ESP32--S3-blue.svg)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Framework](https://img.shields.io/badge/Framework-Arduino%20%7C%20PlatformIO-00979D.svg)](https://platformio.org/)
 [![BACnet/IP](https://img.shields.io/badge/BACnet%2FIP-Port_47808-4A90D9.svg)](https://github.com/bacnet-stack/bacnet-stack)
@@ -55,11 +55,17 @@ The **ESP32 Multi-Protocol BMS Gateway** is an open-source firmware that transfo
 - Redesigned interface following the ISA 101 High Performance HMI standard: desaturated colors, SVG icons, color contrast reserved for operational states (RUN/STOP) and alarms only
 - Single-Page Application (SPA) — near-instant page loads served directly from ESP32 flash
 - Live point configuration (Modbus register / BACnet object mapping) with real-time address conflict detection
+- **Live Log Viewer** — built-in terminal panel in the dashboard navigation bar; cursor-based JSON polling delivers only new entries per cycle, with a real-time status indicator showing connection state
 - Front-end value caching via `sessionStorage` — display does not blank during a device reboot
+
+**BACnet/IP — BTL-Ready Conformance**
+- **SubscribeCOV (Change of Value)** — supervisors subscribe to AV/BV objects; the gateway pushes an unsolicited `ConfirmedCOVNotification` the moment a value exceeds its COV-Increment (default: 1.0 EU, overridable via `WriteProperty`)
+- **ReadPropertyMultiple (RPM)** — optimised discovery for Desigo CC, EBI, and JACE: a single UDP exchange reads all object properties at once, matching the standard BAS integration workflow
+- **Full Device Object** — all 20 BTL-required Device Object properties are implemented (`Vendor_Name`, `Firmware_Revision`, `Protocol_Services_Supported`, `Protocol_Object_Types_Supported`, and more); Vendor Identifier = 260; zero "unknown vendor" warnings in YABE or any compliant supervisor
+- **64 AV / 64 BV / 128 objects maximum** — stable under continuous polling from professional supervisors
 
 **C++ Engine & Protocol Stack**
 - **Simultaneous BACnet/IP and Modbus TCP** — both servers run concurrently with no interference
-- **Expanded BACnet stack limits:** 64 Analog Values, 64 Binary Values, 128 objects maximum — stable operation with tools like YABE and professional supervisors
 - **LittleFS `config.json`** — all point configurations are saved to flash and survive power cuts
 - **NVRAM** — Wi-Fi credentials and AP/STA mode override persist across reboots and OTA updates
 - **Safe Reboot mechanism** — configuration changes from the web UI trigger a clean, watchdog-safe restart sequence
@@ -233,6 +239,7 @@ The firmware ships with a pre-configured Air Handling Unit simulator for out-of-
 | :--- | :--- |
 | **Dashboard (View Mode)** | Live view of all configured data points, gauges, and their current values. |
 | **Dashboard (Edit Mode)** | Add, edit, remove, or drag-and-drop points and sections. Map Modbus/BACnet addresses. |
+| **Logs** | Live log viewer — system, BACnet, and Web UI events in real time; cursor-based polling, connection status dot. |
 | **Network Config** | Wi-Fi scan, credential input, connection status, and explicit AP/STA mode override. |
 
 ---
@@ -245,9 +252,11 @@ ESP32-BMS-Gateway-Multi-Protocol/
 ├── src/
 │   ├── main.cpp                ← Orchestration: setup(), loop(), task scheduling, Safe Reboot
 │   ├── state.cpp               ← Centralized point registry (AnalogPoint, BinaryPoint)
-│   ├── bacnet_handler.cpp      ← BACnet/IP stack, dynamic UDP routing, object callbacks
+│   ├── bacnet_handler.cpp      ← BACnet/IP stack, COV/RPM handlers, Device Object stubs
 │   ├── modbus_handler.cpp      ← Modbus TCP register map ↔ shared state synchronization
-│   └── web_handler.cpp         ← REST API, point config, network scan/connect, mDNS
+│   ├── web_handler.cpp         ← REST API, log stream endpoint, network scan/connect, mDNS
+│   ├── log_handler.cpp         ← In-RAM ring buffer (64 × 80 B), cursor-based delta API
+│   └── sc_stubs.c              ← BACnet/SC linker stubs (bacapp_encode_SC*)
 │
 ├── data/                       ← Front-end assets packaged into LittleFS
 │   ├── index.html              ← Single-Page Application shell
@@ -287,10 +296,12 @@ Web Dashboard        ──► web_handler.cpp    ──┘
 | Parameter | Value |
 | :--- | :--- |
 | Transport | UDP, port `47808` |
-| Supported services | `ReadProperty`, `WriteProperty`, `Who-Is` / `I-Am` |
-| Object types | Binary Value (BV), Analog Value (AV) |
+| Supported services | `ReadProperty`, `WriteProperty`, `ReadPropertyMultiple`, `SubscribeCOV`, `Who-Is` / `I-Am` |
+| Object types | Binary Value (BV), Analog Value (AV), Device Object |
+| Vendor Identifier | `260` (BTL-ready) |
 | Capacity | 64 AV, 64 BV, 128 objects maximum |
-| Discovery | Responds to broadcast `Who-Is` — zero manual address configuration |
+| COV-Increment | 1.0 EU default (overridable per-object via `WriteProperty`) |
+| Discovery | Responds to broadcast `Who-Is` with full Device Object property set — zero manual configuration |
 
 ### Modbus TCP
 

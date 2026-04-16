@@ -1261,5 +1261,68 @@ body {
     .section-cols-4   { flex-basis: 100%; }
 
     .form-grid        { grid-template-columns: 1fr; }
+}
+
+/* ==============================================================================
+   LOG VIEWER MODAL
+   ============================================================================== */
+
+/** Wide, tall modal for the log viewer */
+.modal-log {
+    width: min(90vw, 860px);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-log .modal-body.log-modal-body {
+    flex: 1 1 auto;
+    overflow: hidden;
+    padding: 0;
+    min-height: 0;
+}
+
+/** Terminal-style pre element */
+.log-output {
+    background: #0a0a0c;
+    color: #a8d8a8;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    line-height: 1.55;
+    margin: 0;
+    padding: 10px 14px;
+    height: 100%;
+    min-height: 280px;
+    max-height: 55vh;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+[data-theme="light"] .log-output {
+    background: #1a1a22;
+    color: #90d090;
+}
+
+/** Status dot in modal title */
+.log-status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-left: 8px;
+    vertical-align: middle;
+    background: #757575;
+    flex-shrink: 0;
+    transition: background 0.3s ease;
+}
+
+.log-dot-connected { background: #43a047; }
+.log-dot-error     { background: var(--color-alarm); }
+.log-dot-closed    { background: #757575; }
+
+@media (max-width: 900px) {
     .net-mode-selector { grid-template-columns: 1fr; }
 }

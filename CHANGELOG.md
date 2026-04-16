@@ -11,6 +11,29 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.0] — 2026-04-16
+
+### Added
+- **BACnet ReadPropertyMultiple (RPM)** — `handler_read_property_multiple` registered; supervisors (Desigo CC, EBI, JACE) can now bulk-read all object properties in a single request, which is the standard discovery pattern used by professional BAS integrators.
+- **BACnet SubscribeCOV** — `handler_cov_subscribe` registered; `handler_cov_init()` called at boot and `handler_cov_task()` / `handler_cov_timer_seconds()` driven in the main loop. Supervisors can now subscribe to change-of-value notifications on any Analog Value or Binary Value object. Default AV COV-Increment is 1.0 (one engineering unit); supervisors can override it via `WriteProperty(COV-Increment)`.
+- **BACnet Vendor ID 260** — `Device_Vendor_Identifier()` now returns `260` instead of `0`; eliminates the "unknown vendor" warning shown by YABE and Desigo CC on device discovery.
+- **Dynamic BACnet Device Object Name** — `bacnet_init()` now accepts the NVS `device_name` string and sets it as the BACnet Device Object Name (`PROP_OBJECT_NAME`). The BACnet device name is now consistent with the mDNS hostname and AP SSID.
+- **`Device_COV` / `Device_COV_Clear` / `Device_Encode_Value_List` / `Device_Value_List_Supported` / `Device_Objects_Property_List` / `Device_Valid_Object_Id`** — implemented in `bacnet_handler.cpp` as lightweight dispatchers to the bacnet-stack `av.c` / `bv.c` implementations. Required because `device.c` is excluded from the custom library build (memory optimisation).
+- **BACnet/SC linker stubs** (`src/sc_stubs.c`) — `secure_connect.c` is excluded from the build; four `bacapp_encode_SC*` stub functions provide zero-byte implementations so the linker resolves all references in `bacapp.c` without pulling in the full Secure Connect module.
+- **In-RAM Log Ring Buffer** (`src/log_handler.cpp`, `include/log_handler.h`) — 64-entry × 80-byte circular buffer captures critical system and protocol events. Each entry is written simultaneously to Serial and the buffer. Oldest entries are silently overwritten when the buffer is full.
+- **`GET /api/log/stream`** — Server-Sent Events endpoint; delivers a snapshot of the ring buffer as SSE `data:` events then closes. `EventSource` auto-reconnects (~3 s), providing a near-real-time log view with no persistent storage.
+- **Log Viewer in Web UI** — "Logs" button in the top navigation bar opens a terminal-style modal panel. Status dot indicates SSE connection state (green = connected, red = error, grey = closed). "Clear Display" wipes the on-screen text without affecting the device buffer.
+
+### Changed
+- **`bacnet_init()` signature updated** — new parameter `const String& deviceName` passed from `main.cpp` (reads the NVS `device_name` key, identical to the mDNS / AP SSID derivation path).
+- **`Device_Write_Property` logging** — `Serial.println` replaced by `log_printf` for BACnet write events; entries now appear in the web log viewer.
+- **`web_server_init` startup log** — `Serial.println` replaced by `log_print`; boot message captured in the ring buffer.
+- **All source file headers** bumped to `@version 1.2.0` / `@date 2026-04-16`.
+- **Dashboard version badge** updated to `v1.2.0`.
+- **`docs/manifest.json`** version updated to `1.2.0`.
+
+---
+
 ## [1.1.0] — 2026-04-09
 
 ### Added
@@ -123,7 +146,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - JSON configuration persistence to `/config.json` on LittleFS.
 - Safe Reboot mechanism via `pendingReboot` flag to prevent watchdog crashes during web-triggered restarts.
 
-[Unreleased]: https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/compare/v0.3.0...v1.0.0

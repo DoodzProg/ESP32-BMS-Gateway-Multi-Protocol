@@ -5,8 +5,8 @@
  * coils and holding registers with the global dynamic telemetry state.
  * Registers are allocated based on the bitmask PROTO_MODBUS.
  * @author      Doodz (DoodzProg)
- * @date        2026-04-04
- * @version     1.0.0
+ * @date        2026-04-16
+ * @version     1.2.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 

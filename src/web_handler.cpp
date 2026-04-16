@@ -24,10 +24,11 @@
  * | POST   | /api/switch_network   | Persist network credentials and reboot (JSON body) |
  * | POST   | /api/auth/change      | Change web UI password (SHA-256 stored in NVS)   |
  * | POST   | /api/device/name      | Set device name (mDNS hostname + AP SSID)         |
+ * | GET    | /api/log/stream       | Server-Sent Events stream of in-RAM log ring buffer |
  *
  * @author      Doodz (DoodzProg)
- * @date        2026-04-09
- * @version     1.1.0
+ * @date        2026-04-16
+ * @version     1.2.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 
@@ -35,6 +36,7 @@
 #include "config.h"
 #include "state.h"
 #include "secrets.h"
+#include "log_handler.h"
 #include <WebServer.h>
 #include <WiFi.h>
 #include <Preferences.h>
@@ -644,6 +646,7 @@ void handleWritePoint() {
         
         bool newVal = doc["value"].as<bool>();
         binaryPoints[i].value = newVal;
+        log_printf("WEB", "Binary '%s' → %s", name, newVal ? "ACTIVE" : "INACTIVE");
 
         // Propagate to protocol stacks immediately
         #ifdef ENABLE_MODBUS
@@ -669,6 +672,7 @@ void handleWritePoint() {
         
         float newVal = doc["value"].as<float>();
         analogPoints[i].value = newVal;
+        log_printf("WEB", "Analog '%s' → %.3f", name, newVal);
 
         // Propagate to protocol stacks immediately
         #ifdef ENABLE_MODBUS
@@ -875,6 +879,54 @@ void handleSetDeviceName() {
 }
 
 // ==============================================================================
+// GET /api/log/stream — Server-Sent Events Log Stream
+// ==============================================================================
+
+/**
+ * @brief Returns new log entries since a client-supplied cursor as JSON.
+ *
+ * @details GET /api/log/stream?since=N
+ *          Returns {"entries":["line1","line2",...],"cursor":M} where M is the
+ *          new cursor to pass on the next poll.  Pass since=0 (or omit) to
+ *          receive the full ring-buffer snapshot on first open.
+ *
+ *          The front-end polls this endpoint every 3 s using setInterval +
+ *          fetch(), tracks the returned cursor, and appends only new lines —
+ *          eliminating the "full snapshot replay" problem of reconnecting SSE
+ *          on a single-threaded WebServer that must close connections promptly.
+ */
+void handleLogStream() {
+    if (!_check_auth()) return;
+
+    uint32_t since = 0;
+    String sinceStr = server.arg("since");
+    if (sinceStr.length() > 0) since = (uint32_t)sinceStr.toInt();
+
+    String raw = log_get_since(since);
+    uint32_t cursor = log_get_total();
+
+    DynamicJsonDocument doc(4096);
+    JsonArray arr = doc.createNestedArray("entries");
+
+    int pos = 0;
+    while (pos < (int)raw.length()) {
+        int nl = raw.indexOf('\n', pos);
+        if (nl < 0) nl = raw.length();
+        if (nl > pos) {
+            String line = raw.substring(pos, nl);
+            line.trim();
+            if (line.length() > 0) arr.add(line);
+        }
+        pos = nl + 1;
+    }
+    doc["cursor"] = cursor;
+
+    String json;
+    serializeJson(doc, json);
+    server.send(200, "application/json", json);
+}
+
+// ==============================================================================
 // CAPTIVE PORTAL — OS Detection Redirects (AP mode only)
 // ==============================================================================
 
@@ -925,6 +977,7 @@ void web_server_init() {
     server.on("/api/switch_network",  HTTP_POST, handleSwitchNetwork);
     server.on("/api/auth/change",     HTTP_POST, handleChangeAuth);
     server.on("/api/device/name",     HTTP_POST, handleSetDeviceName);
+    server.on("/api/log/stream",      HTTP_GET,  handleLogStream);
 
     // Captive portal: intercept OS detection URLs and redirect to dashboard
     server.on("/generate_204",        _handle_captive_redirect);  // Android
@@ -945,7 +998,7 @@ void web_server_init() {
     server.onNotFound(_handle_captive_redirect);
 
     server.begin();
-    Serial.println("[WEB] HTTP server started on port 80.");
+    log_print("WEB", "HTTP server started on port 80.");
 }
 
 void web_server_task() {

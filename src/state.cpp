@@ -28,8 +28,8 @@
  * - LittleFS (ESP32 Arduino core) for filesystem I/O.
  *
  * @author      Doodz (DoodzProg)
- * @date        2026-04-04
- * @version     1.0.0
+ * @date        2026-04-16
+ * @version     1.2.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 

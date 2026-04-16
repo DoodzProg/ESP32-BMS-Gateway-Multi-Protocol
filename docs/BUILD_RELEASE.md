@@ -45,22 +45,45 @@ This produces the following intermediate binaries in `.pio/build/esp32-s3/`:
 
 ## Step 3 — Merge All Binaries into a Single File
 
-The browser flash tool (ESP Web Tools) requires a single merged binary that spans the full flash address space. Use `esptool.py merge_bin` to combine all four images at their correct offsets:
+The browser flash tool (ESP Web Tools) requires a single merged binary that spans the full flash address space. Use `esptool.py merge_bin` to combine all four images at their correct offsets.
 
-```bash
-python -m esptool --chip esp32s3 merge_bin \
-  --output docs/merged-firmware.bin \
-  --flash_mode dio \
-  --flash_freq 80m \
-  --flash_size 16MB \
-  0x0000   .pio/build/esp32-s3/bootloader.bin \
-  0x8000   .pio/build/esp32-s3/partitions.bin \
-  0xe000   docs/boot_app0.bin \
-  0x10000  .pio/build/esp32-s3/firmware.bin \
-  0x670000 .pio/build/esp32-s3/littlefs.bin
+**Windows (PowerShell) — recommended:**
+
+```powershell
+# Resolve tool paths from the PlatformIO installation
+$PYTHON   = "$env:USERPROFILE\.platformio\penv\Scripts\python.exe"
+$ESPTOOL  = "$env:USERPROFILE\.platformio\packages\tool-esptoolpy\esptool.py"
+$BOOT_APP = (Get-ChildItem "$env:USERPROFILE\.platformio\packages\framework-arduinoespressif32*" `
+             -Recurse -Filter "boot_app0.bin" | Select-Object -First 1).FullName
+
+& $PYTHON $ESPTOOL --chip esp32s3 merge_bin `
+  --output "docs\merged-firmware.bin" `
+  --flash_mode dio --flash_freq 80m --flash_size 8MB `
+  0x0     ".pio\build\esp32-s3\bootloader.bin" `
+  0x8000  ".pio\build\esp32-s3\partitions.bin" `
+  0xe000  $BOOT_APP `
+  0x10000 ".pio\build\esp32-s3\firmware.bin"
 ```
 
-> **Important:** `docs/boot_app0.bin` is the OTA data partition image. It is version-independent and committed to the repository. Do **not** replace it unless the partition table changes.
+**Linux / macOS:**
+
+```bash
+BOOT_APP=$(find ~/.platformio/packages/framework-arduinoespressif32* \
+           -name boot_app0.bin | head -1)
+
+python ~/.platformio/packages/tool-esptoolpy/esptool.py \
+  --chip esp32s3 merge_bin \
+  --output docs/merged-firmware.bin \
+  --flash_mode dio --flash_freq 80m --flash_size 8MB \
+  0x0     .pio/build/esp32-s3/bootloader.bin \
+  0x8000  .pio/build/esp32-s3/partitions.bin \
+  0xe000  "$BOOT_APP" \
+  0x10000 .pio/build/esp32-s3/firmware.bin
+```
+
+> **Note:** `boot_app0.bin` is extracted directly from the PlatformIO Arduino framework package. It is version-independent and does not need to be committed to the repository.
+>
+> **Flash size:** this project uses `default_8MB.csv`; the `--flash_size` argument must match (`8MB`). The LittleFS partition at `0x670000` is flashed separately (Step 4) and is intentionally excluded from the merged binary so it can be updated independently.
 
 Output: `docs/merged-firmware.bin`
 
@@ -82,39 +105,48 @@ Edit `docs/manifest.json` to bump the version string before publishing:
 
 ```json
 {
-  "name": "ESP32 BMS Gateway",
-  "version": "1.0.1",
+  "name": "BMS Gateway",
+  "version": "X.Y.Z",
+  "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        { "path": "merged-firmware.bin", "offset": 0 }
+        { "path": "merged-firmware.bin", "offset": 0 },
+        { "path": "littlefs.bin",        "offset": 6750208 }
       ]
     }
   ]
 }
 ```
 
+> The LittleFS offset `6750208` (`0x670000`) is fixed by `default_8MB.csv` and must not change between releases unless the partition table is modified.
+
 ---
 
 ## Step 6 — Publish the GitHub Release
 
-1. Tag the commit:
-   ```bash
-   git tag v1.0.1
-   git push origin v1.0.1
+1. Commit all changes, then create an annotated tag:
+   ```powershell
+   git add .
+   git commit -m "release: vX.Y.Z — <short summary>"
+   git tag -a vX.Y.Z -m "Release vX.Y.Z"
+   git push origin main
+   git push origin vX.Y.Z
    ```
 
-2. Create the GitHub Release via the web UI or CLI:
+2. Create the GitHub Release via the web UI (recommended) or CLI:
    ```bash
-   gh release create v1.0.1 \
+   gh release create vX.Y.Z \
      docs/merged-firmware.bin \
      docs/littlefs.bin \
-     --title "v1.0.1 — Quality & Documentation" \
+     --title "vX.Y.Z — <release title>" \
      --notes-file CHANGELOG.md
    ```
 
 3. The GitHub Pages flash page at `https://DoodzProg.github.io/ESP32-BMS-Gateway-Multi-Protocol` automatically picks up the updated `docs/manifest.json` on the next push to `main`.
+
+> **Annotated tags** (`-a`) are required for GitHub to correctly render the release in the tags list and for `git describe` to work. Lightweight tags (`git tag vX.Y.Z`) are not sufficient for release publishing.
 
 ---
 

@@ -21,8 +21,8 @@
  *              front-end (rendering, UI state, styles).
  *
  * @author      Doodz (DoodzProg)
- * @date        2026-04-09
- * @version     1.1.0
+ * @date        2026-04-16
+ * @version     1.2.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 
@@ -1647,4 +1647,121 @@ function escAttr(str) {
         .replace(/&/g, '&amp;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+// ==============================================================================
+// LOG VIEWER MODAL
+// Uses EventSource (SSE) to stream the in-RAM ring-buffer from /api/log/stream.
+// The server sends a snapshot then closes; EventSource auto-reconnects (~3 s),
+// giving a near-real-time view of the device's recent log entries.
+// ==============================================================================
+
+/** @type {number|null} setInterval handle for the log polling loop. */
+let _logPollTimer = null;
+
+/** @type {number} Cursor returned by the last successful /api/log/stream fetch. */
+let _logCursor = 0;
+
+/** @type {boolean} Whether auto-scroll is currently active. */
+let _logAutoScroll = true;
+
+/**
+ * @brief Opens the log modal and connects the SSE stream.
+ */
+function openLogModal() {
+    document.getElementById('logModal').classList.add('open');
+    _startLogStream();
+}
+
+/**
+ * @brief Closes the log modal and disconnects the SSE stream.
+ */
+function closeLogModal() {
+    document.getElementById('logModal').classList.remove('open');
+    _stopLogStream();
+}
+
+/**
+ * @brief Clears the displayed log output (does not affect the device buffer).
+ */
+function _clearLogDisplay() {
+    const pre = document.getElementById('logOutput');
+    if (pre) pre.textContent = '';
+}
+
+/**
+ * @brief Updates the SSE connection-status dot in the modal title.
+ * @param {'connected'|'error'|'closed'} state - Current connection state.
+ */
+function _setLogDotState(state) {
+    const dot = document.getElementById('logStatusDot');
+    if (!dot) return;
+    dot.className = 'log-status-dot log-dot-' + state;
+    dot.title = { connected: 'Connected', error: 'Connection error — retrying', closed: 'Disconnected' }[state] || state;
+}
+
+/**
+ * @brief Appends a single log line to the pre element.
+ *        Maintains a rolling display limit to avoid DOM bloat.
+ * @param {string} line - Unescaped log line text.
+ */
+function _appendLogLine(line) {
+    const pre = document.getElementById('logOutput');
+    if (!pre) return;
+
+    // Rolling limit: keep at most 500 lines in the DOM
+    const lines = pre.textContent.split('\n');
+    if (lines.length > 500) {
+        pre.textContent = lines.slice(lines.length - 500).join('\n');
+    }
+
+    pre.textContent += line + '\n';
+
+    // Auto-scroll to bottom
+    if (_logAutoScroll) {
+        pre.scrollTop = pre.scrollHeight;
+    }
+}
+
+/**
+ * @brief Fetches new log entries from /api/log/stream?since=_logCursor and
+ *        appends them to the display.  Updates the cursor so successive polls
+ *        only receive genuinely new lines.
+ */
+async function _fetchLogDelta() {
+    try {
+        const resp = await fetch(`/api/log/stream?since=${_logCursor}`);
+        if (!resp.ok) { _setLogDotState('error'); return; }
+        const data = await resp.json();
+        _setLogDotState('connected');
+        _logCursor = data.cursor;
+        if (Array.isArray(data.entries) && data.entries.length > 0) {
+            data.entries.forEach(line => _appendLogLine(line));
+        }
+    } catch (_) {
+        _setLogDotState('error');
+    }
+}
+
+/**
+ * @brief Starts the log polling loop (fetch every 3 s).
+ *        Cursor is reset to 0 so the full ring-buffer snapshot is shown on open.
+ */
+function _startLogStream() {
+    _stopLogStream();
+    _logCursor = 0;
+    _setLogDotState('closed');
+    _fetchLogDelta();  // immediate first fetch
+    _logPollTimer = setInterval(_fetchLogDelta, 3000);
+}
+
+/**
+ * @brief Stops the log polling loop.
+ */
+function _stopLogStream() {
+    if (_logPollTimer !== null) {
+        clearInterval(_logPollTimer);
+        _logPollTimer = null;
+    }
+    _setLogDotState('closed');
 }

@@ -5,8 +5,8 @@
  * mDNS routing, captive portal (AP mode), and launches the protocol tasks.
  * Important: State loading via JSON must occur before protocol initialization.
  * @author      Doodz (DoodzProg)
- * @date        2026-04-09
- * @version     1.1.0
+ * @date        2026-04-16
+ * @version     1.2.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 
@@ -18,6 +18,7 @@
 #include "config.h"
 #include "secrets.h"
 #include "state.h"
+#include "log_handler.h"
 
 // Conditional includes based on platformio.ini flags
 #ifdef ENABLE_MODBUS
@@ -78,6 +79,7 @@ static String _sanitise_hostname(const String& raw) {
 // ==============================================================================
 void setup() {
     Serial.begin(115200);
+    log_init();
 
     // 1. Initialize NVRAM and read parameters silently
     Preferences pref;
@@ -194,12 +196,12 @@ void setup() {
     IPAddress bacnet_bind_ip;
     if (WiFi.getMode() == WIFI_STA && WiFi.status() == WL_CONNECTED) {
         bacnet_bind_ip = WiFi.localIP();
-        Serial.println("[SYSTEM] Assigning BACnet to STA (Primary Network)");
+        log_print("SYSTEM", "Assigning BACnet to STA (Primary Network)");
     } else {
         bacnet_bind_ip = WiFi.softAPIP();
-        Serial.println("[SYSTEM] Assigning BACnet to AP (Fallback/Forced Network)");
+        log_print("SYSTEM", "Assigning BACnet to AP (Fallback/Forced Network)");
     }
-    bacnet_init(bacnet_bind_ip);
+    bacnet_init(bacnet_bind_ip, deviceName);
     Serial.println("[SYSTEM] BACnet/IP ready.");
 #endif
 }
