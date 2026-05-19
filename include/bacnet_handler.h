@@ -2,11 +2,11 @@
  * @file        bacnet_handler.h
  * @brief       BACnet/IP protocol handler and dynamic binding declarations.
  * @details     Exposes the global state as BACnet objects and intercepts write requests.
- *              v1.2.0 additions: COV subscriptions, ReadPropertyMultiple,
- *              dynamic device name from NVS, Vendor ID 260.
+ *              v1.2.0: COV subscriptions, ReadPropertyMultiple, dynamic device name, Vendor ID 260.
+ *              v1.3.0: dynamic subnet prefix detection, async-safe init.
  * @author      Doodz (DoodzProg)
- * @date        2026-04-16
- * @version     1.2.0
+ * @date        2026-05-19
+ * @version     1.3.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 

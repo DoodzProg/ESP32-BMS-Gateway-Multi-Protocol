@@ -1,0 +1,203 @@
+/*
+ * ==============================================================================
+ * @file        style.css
+ * @brief       Stylesheet for the BMS Gateway ESP Web Tools installer page.
+ * @author      Doodz (DoodzProg)
+ * @date        2026-05-19
+ * @version     1.3.0
+ * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
+ * ==============================================================================
+ */
+
+/* ── Reset & base ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg-page:      #08080b;
+    --bg-card:      rgba(18, 18, 24, 0.85);
+    --border:       rgba(255, 255, 255, 0.07);
+    --border-hover: rgba(255, 255, 255, 0.14);
+    --accent:       #00c8ff;
+    --accent-dim:   rgba(0, 200, 255, 0.12);
+    --accent-glow:  rgba(0, 200, 255, 0.35);
+    --text-hi:      #f0f0f4;
+    --text-mid:     #8a8a9a;
+    --text-lo:      #4a4a5a;
+    --badge-bg:     rgba(0, 200, 255, 0.10);
+    --badge-border: rgba(0, 200, 255, 0.30);
+    --step-bg:      rgba(255, 255, 255, 0.03);
+}
+
+html, body {
+    height: 100%;
+}
+
+body {
+    background-color: var(--bg-page);
+    color: var(--text-mid);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+    background-image: radial-gradient(
+        ellipse 60% 50% at 50% 40%,
+        rgba(0, 200, 255, 0.04) 0%,
+        transparent 70%
+    );
+}
+
+/* ── Card ─────────────────────────────────────────────────────── */
+.card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 44px 48px 40px;
+    max-width: 520px;
+    width: 100%;
+    text-align: center;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04) inset,
+        0 32px 80px rgba(0, 0, 0, 0.6),
+        0 0 60px rgba(0, 200, 255, 0.04);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.card:hover {
+    border-color: var(--border-hover);
+    box-shadow:
+        0 0 0 1px rgba(255,255,255,0.06) inset,
+        0 32px 80px rgba(0, 0, 0, 0.7),
+        0 0 80px rgba(0, 200, 255, 0.07);
+}
+
+/* ── Version badge ────────────────────────────────────────────── */
+.badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--badge-bg);
+    border: 1px solid var(--badge-border);
+    border-radius: 20px;
+    padding: 4px 14px;
+    margin-bottom: 20px;
+}
+
+/* ── Heading ──────────────────────────────────────────────────── */
+h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-hi);
+    letter-spacing: -0.3px;
+    margin-bottom: 8px;
+    line-height: 1.2;
+}
+
+.subtitle {
+    font-size: 13px;
+    color: var(--text-mid);
+    margin-bottom: 32px;
+    line-height: 1.6;
+}
+
+/* ── Feature pills ────────────────────────────────────────────── */
+.features {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 32px;
+}
+.feat {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    color: var(--text-mid);
+    background: var(--step-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 12px;
+}
+
+/* ── Steps list ───────────────────────────────────────────────── */
+.steps {
+    background: var(--step-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    text-align: left;
+    margin-bottom: 28px;
+}
+.steps-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+}
+.steps ol {
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.steps li {
+    font-size: 13px;
+    color: var(--text-mid);
+    line-height: 1.5;
+}
+.steps li strong {
+    color: var(--text-hi);
+    font-weight: 600;
+}
+
+/* ── Install button wrapper (glow effect) ─────────────────────── */
+.install-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 24px;
+    filter: drop-shadow(0 0 14px var(--accent-glow));
+}
+
+/* ── esp-web-install-button custom properties ─────────────────── */
+esp-web-install-button {
+    --esp-tools-button-color:      var(--accent);
+    --esp-tools-button-text-color: #000000;
+}
+
+/* ── Footer ───────────────────────────────────────────────────── */
+.footer {
+    font-size: 11px;
+    color: var(--text-lo);
+    line-height: 1.7;
+}
+.footer a {
+    color: var(--text-mid);
+    text-decoration: none;
+    border-bottom: 1px solid var(--text-lo);
+    transition: color 0.2s, border-color 0.2s;
+}
+.footer a:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* ── Divider ──────────────────────────────────────────────────── */
+.divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 24px 0;
+}
+
+/* ── Responsive ───────────────────────────────────────────────── */
+@media (max-width: 560px) {
+    .card { padding: 32px 24px 28px; border-radius: 12px; }
+    h1    { font-size: 22px; }
+}

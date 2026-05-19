@@ -28,8 +28,8 @@
  * - LittleFS (ESP32 Arduino core) for filesystem I/O.
  *
  * @author      Doodz (DoodzProg)
- * @date        2026-04-16
- * @version     1.2.0
+ * @date        2026-05-19
+ * @version     1.3.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 
@@ -253,12 +253,7 @@ bool state_load_from_json() {
         }
     }
 
-    // Update global count accurately
-    NUM_BINARY_POINTS = binArr.size();
-    NUM_ANALOG_POINTS = anaArr.size();
-    NUM_SECTIONS      = secArr.size();
-
-    Serial.printf("[STATE] Loaded from config.json: %d Binary, %d Analog, %d Sections.\n", 
+    Serial.printf("[STATE] Loaded from config.json: %d Binary, %d Analog, %d Sections.\n",
                   NUM_BINARY_POINTS, NUM_ANALOG_POINTS, NUM_SECTIONS);
     return true;
 }
@@ -307,14 +302,21 @@ bool state_save_to_json() {
         }
     }
 
-    // Atomic write: open for write (truncate), serialise, close.
-    File f = LittleFS.open(CONFIG_FILE_PATH, "w");
+    // Atomic write: serialise to a temp file, then rename over the live config.
+    // A power-cut during write leaves the .tmp file corrupt but the live config.json intact.
+    File f = LittleFS.open(CONFIG_FILE_TMP_PATH, "w");
     if (!f) {
-        Serial.println("[STATE] ERROR: Cannot open config.json for writing.");
+        Serial.println("[STATE] ERROR: Cannot open config.json.tmp for writing.");
         return false;
     }
     serializeJson(doc, f);
     f.close();
+
+    if (!LittleFS.rename(CONFIG_FILE_TMP_PATH, CONFIG_FILE_PATH)) {
+        Serial.println("[STATE] ERROR: rename config.json.tmp → config.json failed.");
+        LittleFS.remove(CONFIG_FILE_TMP_PATH);
+        return false;
+    }
 
     Serial.printf("[STATE] config.json saved (%d B, %d A, %d S).\n",
                   NUM_BINARY_POINTS, NUM_ANALOG_POINTS, NUM_SECTIONS);

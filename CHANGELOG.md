@@ -11,6 +11,32 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.3.0] — 2026-05-19
+
+### Security
+- **SEC-1 — Passwords removed from `/api/system` response** — `staPASS` and `apPASS` string fields replaced by `hasSTAPass` / `hasAPPass` booleans; credential values are never read from NVS in the handler. Empty password field in the network modal no longer erases the stored STA credential (`handleSwitchNetwork` guard added).
+- **SEC-3 — `/api/scan` authenticated** — missing `_check_auth()` guard added; endpoint was previously accessible without credentials.
+- **SEC-4 — XSS fixed in network modal** — `deviceName` and `apSsid` are now passed through `escHtml()` / `escAttr()` before insertion into `innerHTML` in `saveAndSwitch()` and `saveDeviceName()`.
+- **SEC-9 — Server-side point name validation** — `handleAddPoint()` and `handleUpdatePoint()` reject names that do not match `[a-zA-Z0-9_\-]+` (1–63 chars) via the new `_is_valid_point_name()` helper. Prevents JSON injection, HTML injection, and BACnet object-name conflicts.
+
+### Fixed
+- **BUG-1 — State counter overwrite** — removed four post-loop lines in `state_load_from_json()` that reassigned `NUM_BINARY_POINTS` / `NUM_ANALOG_POINTS` / `NUM_SECTIONS` from `array.size()`, bypassing the `MAX_POINTS=64` cap enforced by the loop.
+- **BUG-2 — Double Modbus processing** — removed `mb.task()` call from inside `bacnet_task()`; it was invoked again from the main loop, causing every received BACnet packet to trigger a second Modbus processing cycle.
+- **BUG-3 — Atomic `config.json` write** — `state_save_to_json()` now writes to `/config.json.tmp` and uses `LittleFS.rename()` to atomically swap it over the live file. A power cut during serialisation leaves the previous configuration intact. Added `CONFIG_FILE_TMP_PATH` define to `state.h`.
+- **BUG-4 — BACnet subnet prefix no longer hardcoded** — `bip_set_subnet_prefix()` now reads `WiFi.subnetMask()` in STA mode instead of always assuming `/24`; AP mode retains the ESP32 default of `/24`. New `_subnet_prefix_from_mask()` helper with safe fallback on degenerate input.
+
+### Changed
+- **Wi-Fi scan is now non-blocking** — `handleScan()` uses `WiFi.scanNetworks(async=true)` and a state machine; the client (`scanWifi()` in `app.js`) polls `/api/scan` every second and handles `{"status":"scanning"}` (HTTP 202) until results arrive (HTTP 200 + array). Eliminates the 3–5 s watchdog risk of the previous synchronous scan.
+- **PSRAM-backed JSON document pools** — response-builder `DynamicJsonDocument` instances in `handleData()`, `handleGetConfig()`, `handleLogStream()`, and `handleScan()` now use `SpiRamJsonDocument` (custom `BasicJsonDocument<SpiRamAllocator>`) backed by `ps_malloc()`. Falls back to `malloc()` on boards without PSRAM. Preserves internal heap for protocol stacks under heavy polling.
+- **`handleData()` refactored** — String concatenation replaced by ArduinoJson serialisation; eliminates repeated heap fragmentation on the 1 Hz polling path. Input-parser documents (≤1 KB) remain on internal heap.
+- **`handleScan()` JSON correctness** — scan results now serialised via ArduinoJson; SSIDs containing `"` or `\` were previously silently producing malformed JSON.
+- **All source file headers** bumped to `@version 1.3.0` / `@date 2026-05-19`.
+- **Dashboard version badge** updated to `v1.3.0`.
+- **BACnet `PROP_FIRMWARE_REVISION` and `PROP_APPLICATION_SOFTWARE_VERSION`** updated to `"1.3.0"`.
+- **`docs/manifest.json`** version updated to `1.3.0`.
+
+---
+
 ## [1.2.0] — 2026-04-16
 
 ### Added
@@ -146,7 +172,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - JSON configuration persistence to `/config.json` on LittleFS.
 - Safe Reboot mechanism via `pendingReboot` flag to prevent watchdog crashes during web-triggered restarts.
 
-[Unreleased]: https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol/compare/v1.0.0...v1.0.1

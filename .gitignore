@@ -1,18 +1,18 @@
-# Dossiers générés par PlatformIO et VS Code
+# PlatformIO build output and IDE files
 .pio/
 .vscode/
 
-# Fichiers de configuration sensibles
+# Sensitive credentials — never commit
 include/secrets.h
 
-# Fichiers binaires de build
+# Compiled binaries and map files
 *.bin
 *.elf
 *.map
 
-# Fichiers d'installation WEB
-!docs/*.bin
-!docs/*.json
+# Release binaries committed to docs/ for the GitHub Pages web installer
+!docs/merged-firmware.bin
+!docs/littlefs.bin
 
-# Dossiers de données et de cache IA 
-.claude/
+# JSON files in docs/ (manifest.json) are always tracked
+!docs/*.json

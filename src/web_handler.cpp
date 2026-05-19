@@ -7,7 +7,7 @@
  * (point creation, deletion, value writes, layout changes) are immediately
  * persisted to /config.json via state_save_to_json() to survive hard resets.
  *
- * ### API Surface (v1.1.0)
+ * ### API Surface (v1.3.0)
  *
  * | Method | Endpoint              | Description                                      |
  * |--------|-----------------------|--------------------------------------------------|
@@ -27,8 +27,8 @@
  * | GET    | /api/log/stream       | Server-Sent Events stream of in-RAM log ring buffer |
  *
  * @author      Doodz (DoodzProg)
- * @date        2026-04-16
- * @version     1.2.0
+ * @date        2026-05-19
+ * @version     1.3.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 
@@ -78,10 +78,28 @@ extern bool g_isAPMode;  // Set by main.cpp; true when device is in AP/captive-p
 
 WebServer server(80);
 
-/** * @brief Flag to trigger a safe reboot in the main loop.
- * @details Prevents watchdog crashes by avoiding ESP.restart() inside async web requests. 
+/**
+ * @brief Flag to trigger a safe reboot in the main loop.
+ * @details Prevents watchdog crashes by avoiding ESP.restart() inside async web requests.
  */
 volatile bool pendingReboot = false;
+
+// ==============================================================================
+// PSRAM-BACKED JSON ALLOCATOR
+// ==============================================================================
+
+/**
+ * @brief ArduinoJson 6.x custom allocator that routes large document pools to PSRAM.
+ * @details Falls back to regular malloc if PSRAM is not detected at runtime, so the
+ *          same firmware image runs on boards with and without external PSRAM.
+ *          Only used for response-builder documents (≥2 KB). Input-parser documents
+ *          (≤1 KB) stay on the internal heap where latency matters more than capacity.
+ */
+struct SpiRamAllocator {
+    void* allocate(size_t size)    { return psramFound() ? ps_malloc(size) : malloc(size); }
+    void  deallocate(void* ptr)    { free(ptr); }
+};
+using SpiRamJsonDocument = BasicJsonDocument<SpiRamAllocator>;
 
 // ==============================================================================
 // SECURITY HELPERS
@@ -211,6 +229,27 @@ static void _remove_point_from_sections(const char* pointName) {
     }
 }
 
+/**
+ * @brief Validates a point name against the allowed character set.
+ * @details Allowed: ASCII letters, digits, underscore, hyphen. Length 1–(MAX_NAME_LEN-1).
+ *          Rejects names containing characters that could inject JSON, HTML, or
+ *          conflict with filesystem / BACnet object-name rules.
+ * @param  name  Null-terminated candidate name.
+ * @return true  if the name is acceptable; false otherwise.
+ */
+static bool _is_valid_point_name(const char* name) {
+    size_t len = strlen(name);
+    if (len == 0 || len >= MAX_NAME_LEN) return false;
+    for (size_t i = 0; i < len; i++) {
+        char c = name[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '_' || c == '-')) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // ==============================================================================
 // GET /api/data — Live Telemetry Polling
 // ==============================================================================
@@ -218,56 +257,61 @@ static void _remove_point_from_sections(const char* pointName) {
 /** @brief Sends live telemetry (current values + RAM stats) for all configured points. */
 void handleData() {
     if (!_check_auth()) return;
-    String json = "{";
 
     uint32_t freeRam  = ESP.getFreeHeap();
     uint32_t totalRam = ESP.getHeapSize();
     uint32_t usedRam  = totalRam - freeRam;
-    int      ramPct   = (usedRam * 100) / totalRam;
 
-    json += "\"sys\":{";
-    json += "\"ram_used\":"  + String(usedRam)  + ",";
-    json += "\"ram_total\":" + String(totalRam) + ",";
-    json += "\"ram_pct\":"   + String(ramPct);
-    json += "},";
+    // Document pool allocated in PSRAM; with 64+64 points the pool can reach ~6 KB.
+    SpiRamJsonDocument doc(8192);
 
-    json += "\"binary\":[";
+    JsonObject sys = doc.createNestedObject("sys");
+    sys["ram_used"]  = usedRam;
+    sys["ram_total"] = totalRam;
+    sys["ram_pct"]   = (usedRam * 100) / totalRam;
+
+    JsonArray binArr = doc.createNestedArray("binary");
     for (int i = 0; i < NUM_BINARY_POINTS; i++) {
-        json += "{\"name\":\""     + String(binaryPoints[i].name) + "\",";
-        json += "\"value\":"       + String(binaryPoints[i].value ? "true" : "false") + ",";
-        json += "\"writable\":"    + String(binaryPoints[i].writable ? "true" : "false") + "}";
-        if (i < NUM_BINARY_POINTS - 1) json += ",";
+        JsonObject o = binArr.createNestedObject();
+        o["name"]     = binaryPoints[i].name;
+        o["value"]    = binaryPoints[i].value;
+        o["writable"] = binaryPoints[i].writable;
     }
-    json += "],";
 
-    json += "\"analog\":[";
+    JsonArray anaArr = doc.createNestedArray("analog");
     for (int i = 0; i < NUM_ANALOG_POINTS; i++) {
-        json += "{\"name\":\""     + String(analogPoints[i].name)  + "\",";
-        json += "\"value\":"       + String(analogPoints[i].value) + ",";
-        json += "\"writable\":"    + String(analogPoints[i].writable ? "true" : "false") + "}";
-        if (i < NUM_ANALOG_POINTS - 1) json += ",";
+        JsonObject o = anaArr.createNestedObject();
+        o["name"]     = analogPoints[i].name;
+        o["value"]    = analogPoints[i].value;
+        o["writable"] = analogPoints[i].writable;
     }
-    json += "]}";
 
-    server.send(200, "application/json", json);
+    String out;
+    serializeJson(doc, out);
+    server.send(200, "application/json", out);
 }
 
 // ==============================================================================
 // GET /api/system — Network Configuration
 // ==============================================================================
 
-/** @brief Returns current network configuration, active mode, device/client IP addresses, and auth status. */
+/**
+ * @brief Returns current network configuration, active mode, device/client IP addresses, and auth status.
+ * @note  Passwords are never included in the response. The hasSTAPass / hasAPPass boolean fields
+ *        indicate whether a credential is stored, without ever exposing its value.
+ */
 void handleSystem() {
     if (!_check_auth()) return;
 
-    // Single NVS read — all keys from the same namespace in one pass
+    // Single NVS read — all keys from the same namespace in one pass.
+    // Passwords are checked for existence only; their values are never read into RAM here.
     Preferences pref;
     pref.begin("bms-app", false);
-    String currentSTA  = pref.isKey("sta_ssid")    ? pref.getString("sta_ssid")    : String(WIFI_SSID);
-    String currentSTP  = pref.isKey("sta_pass")    ? pref.getString("sta_pass")    : String(WIFI_PASS);
-    String currentAP   = pref.isKey("ap_ssid")     ? pref.getString("ap_ssid")     : String(AP_SSID);
-    String currentAP_P = pref.isKey("ap_pass")     ? pref.getString("ap_pass")     : String(AP_PASS);
-    String devName     = pref.isKey("device_name") ? pref.getString("device_name") : String(DEFAULT_DEVICE_NAME);
+    String currentSTA = pref.isKey("sta_ssid")    ? pref.getString("sta_ssid")    : String(WIFI_SSID);
+    String currentAP  = pref.isKey("ap_ssid")     ? pref.getString("ap_ssid")     : String(AP_SSID);
+    String devName    = pref.isKey("device_name") ? pref.getString("device_name") : String(DEFAULT_DEVICE_NAME);
+    bool   hasSTAPass = pref.isKey("sta_pass")    && pref.getString("sta_pass").length() > 0;
+    bool   hasAPPass  = pref.isKey("ap_pass")     && pref.getString("ap_pass").length()  > 0;
     pref.end();
 
     // Auth namespace (separate partition — open read-write to auto-create if first boot)
@@ -276,16 +320,18 @@ void handleSystem() {
     bool pwdChanged = prefAuth.getBool("pwd_changed", false);
     prefAuth.end();
 
-    String espIP = (WiFi.getMode() == WIFI_AP)
+    // WIFI_AP_STA is active during and briefly after an async Wi-Fi scan in AP mode;
+    // localIP() returns 0.0.0.0 in that state, so use softAPIP() whenever the AP flag is set.
+    String espIP = (WiFi.getMode() & WIFI_AP)
         ? WiFi.softAPIP().toString()
         : WiFi.localIP().toString();
 
     String json = "{";
-    json += "\"isAP\":"             + String(WiFi.getMode() == WIFI_AP ? "true" : "false") + ",";
-    json += "\"staSSID\":\""        + currentSTA  + "\",";
-    json += "\"staPASS\":\""        + currentSTP  + "\",";
-    json += "\"apSSID\":\""         + currentAP   + "\",";
-    json += "\"apPASS\":\""         + currentAP_P + "\",";
+    json += "\"isAP\":"             + String(WiFi.getMode() & WIFI_AP ? "true" : "false") + ",";
+    json += "\"staSSID\":\""        + currentSTA + "\",";
+    json += "\"hasSTAPass\":"       + String(hasSTAPass ? "true" : "false") + ",";
+    json += "\"apSSID\":\""         + currentAP  + "\",";
+    json += "\"hasAPPass\":"        + String(hasAPPass  ? "true" : "false") + ",";
     json += "\"clientIP\":\""       + server.client().remoteIP().toString() + "\",";
     json += "\"espIP\":\""          + espIP + "\",";
     json += "\"deviceName\":\""     + devName + "\",";
@@ -302,7 +348,7 @@ void handleSystem() {
 /** @brief Exports the complete point definition list and dashboard section layout as JSON. */
 void handleGetConfig() {
     if (!_check_auth()) return;
-    DynamicJsonDocument doc(8192);
+    SpiRamJsonDocument doc(8192);
 
     JsonArray binArr = doc.createNestedArray("binary");
     for (int i = 0; i < NUM_BINARY_POINTS; i++) {
@@ -389,8 +435,8 @@ void handleAddPoint() {
     const char* type = doc["type"] | "";
     const char* name = doc["name"] | "";
 
-    if (strlen(name) == 0 || strlen(name) >= MAX_NAME_LEN) {
-        _send_error(400, "Invalid or missing point name"); return;
+    if (!_is_valid_point_name(name)) {
+        _send_error(400, "Invalid point name: use letters, digits, underscore, hyphen only (1-63 chars)"); return;
     }
 
     for (int i = 0; i < NUM_BINARY_POINTS; i++) {
@@ -506,6 +552,13 @@ void handleUpdatePoint() {
 
     const char* name    = doc["name"]    | "";
     const char* newName = doc["newName"] | "";
+
+    if (!_is_valid_point_name(name)) {
+        _send_error(400, "Invalid point name: use letters, digits, underscore, hyphen only (1-63 chars)"); return;
+    }
+    if (strlen(newName) > 0 && !_is_valid_point_name(newName)) {
+        _send_error(400, "Invalid new name: use letters, digits, underscore, hyphen only (1-63 chars)"); return;
+    }
 
     bool found = false;
 
@@ -749,20 +802,55 @@ void handleCheckAddress() {
 // GET /api/scan — Wi-Fi Network Scan
 // ==============================================================================
 
-/** @brief Scans surrounding Wi-Fi networks and returns an array of SSIDs with their RSSI values. */
+/**
+ * @brief Non-blocking Wi-Fi network scan using the ESP32 async scan API.
+ *
+ * @details This handler implements a polling state machine to avoid blocking the
+ *          main loop for the 3-5 seconds that a synchronous scan would require,
+ *          which would otherwise risk a watchdog reset.
+ *
+ *          Protocol:
+ *            - HTTP 202 + {"status":"scanning"} : scan is in progress; poll again.
+ *            - HTTP 200 + JSON array             : scan complete, results attached.
+ *            - HTTP 500 + {"status":"error"}     : scan failed; client may retry.
+ *
+ *          The client (app.js scanWifi()) polls this endpoint every 1 second until
+ *          it receives a 200 response.
+ */
 void handleScan() {
-    int currentMode = WiFi.getMode();
-    if (currentMode == WIFI_AP) WiFi.mode(WIFI_AP_STA);
+    if (!_check_auth()) return;
 
-    int    n    = WiFi.scanNetworks();
-    String json = "[";
-    for (int i = 0; i < n; ++i) {
-        json += "{\"ssid\":\"" + WiFi.SSID(i) + "\",\"rssi\":" + String(WiFi.RSSI(i)) + "}";
-        if (i < n - 1) json += ",";
+    int result = WiFi.scanComplete();
+
+    if (result == WIFI_SCAN_RUNNING) {
+        // Scan started by a previous request — still running.
+        server.send(202, "application/json", "{\"status\":\"scanning\"}");
+        return;
     }
-    json += "]";
 
-    if (currentMode == WIFI_AP) WiFi.mode(WIFI_AP);
+    if (result == WIFI_SCAN_FAILED) {
+        // No scan in progress (or previous scan failed) — start a fresh async scan.
+        // ESP32-S3 supports scanning directly in WIFI_AP mode; no mode switch needed.
+        WiFi.scanNetworks(/*async=*/true);
+        log_print("WEB", "Wi-Fi async scan started.");
+        server.send(202, "application/json", "{\"status\":\"scanning\"}");
+        return;
+    }
+
+    // result >= 0: scan complete. Build the response using ArduinoJson so that
+    // SSIDs containing quotes or backslashes are correctly escaped.
+    SpiRamJsonDocument doc(2048);
+    JsonArray arr = doc.to<JsonArray>();
+    for (int i = 0; i < result; i++) {
+        JsonObject obj = arr.createNestedObject();
+        obj["ssid"] = WiFi.SSID(i);
+        obj["rssi"] = WiFi.RSSI(i);
+    }
+    WiFi.scanDelete();
+
+    String json;
+    serializeJson(doc, json);
+    log_printf("WEB", "Wi-Fi scan complete: %d networks found.", result);
     server.send(200, "application/json", json);
 }
 
@@ -796,7 +884,7 @@ void handleSwitchNetwork() {
         const char* ssid = doc["ssid"] | "";
         const char* pass = doc["pass"] | "";
         if (strlen(ssid) > 0) pref.putString("sta_ssid", ssid);
-        pref.putString("sta_pass", pass);
+        if (strlen(pass) > 0) pref.putString("sta_pass", pass);
     }
     pref.end();
 
@@ -865,8 +953,16 @@ void handleSetDeviceName() {
     if (!_parse_body(doc)) return;
 
     const char* name = doc["name"] | "";
-    if (strlen(name) == 0 || strlen(name) > 32) {
+    size_t nameLen = strlen(name);
+    if (nameLen == 0 || nameLen > 32) {
         _send_error(400, "name must be 1–32 characters"); return;
+    }
+    for (size_t i = 0; i < nameLen; ++i) {
+        char c = name[i];
+        if (!isalnum((unsigned char)c) && c != '_' && c != '-') {
+            _send_error(400, "name must contain only letters, digits, hyphen, or underscore");
+            return;
+        }
     }
 
     Preferences pref;
@@ -905,7 +1001,7 @@ void handleLogStream() {
     String raw = log_get_since(since);
     uint32_t cursor = log_get_total();
 
-    DynamicJsonDocument doc(4096);
+    SpiRamJsonDocument doc(4096);
     JsonArray arr = doc.createNestedArray("entries");
 
     int pos = 0;

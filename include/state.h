@@ -15,8 +15,8 @@
  * (FreeRTOS) environment, acquire the shared mutex before accessing these arrays.
  *
  * @author      Doodz (DoodzProg)
- * @date        2026-04-16
- * @version     1.2.0
+ * @date        2026-05-19
+ * @version     1.3.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 
@@ -42,7 +42,9 @@
 #define MAX_POINTS_PER_SECTION 32
 
 /** @brief File path for persisting the dynamic configuration in LittleFS. */
-#define CONFIG_FILE_PATH "/config.json"
+#define CONFIG_FILE_PATH     "/config.json"
+/** @brief Temporary write target; renamed to CONFIG_FILE_PATH on success to ensure atomic saves. */
+#define CONFIG_FILE_TMP_PATH "/config.json.tmp"
 
 // ==============================================================================
 // PROTOCOL BITMASKS

@@ -5,8 +5,8 @@
  * mDNS routing, captive portal (AP mode), and launches the protocol tasks.
  * Important: State loading via JSON must occur before protocol initialization.
  * @author      Doodz (DoodzProg)
- * @date        2026-04-16
- * @version     1.2.0
+ * @date        2026-05-19
+ * @version     1.3.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 

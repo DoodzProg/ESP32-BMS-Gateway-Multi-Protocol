@@ -4,8 +4,9 @@
  *
  * @details     Integrates the bacnet-stack v1.5.0 rc5 (BIP datalink) and exposes
  *              the gateway's dynamic point map as BACnet Analog Value and Binary
- *              Value objects.  v1.2.0 adds the services required for interoperability
- *              with professional BAS supervisors (Desigo CC, EBI, etc.):
+ *              Value objects.  v1.2.0 added RPM/COV/SubscribeCOV for BTL conformance.
+ *              v1.3.0 adds dynamic subnet detection and async-safe integration with
+ *              professional BAS supervisors (Desigo CC, EBI, etc.):
  *
  *              | Service                  | Handler                          |
  *              |--------------------------|----------------------------------|
@@ -31,8 +32,8 @@
  *              correct AV/BV implementations without the full device.c machinery.
  *
  * @author      Doodz (DoodzProg)
- * @date        2026-04-16
- * @version     1.2.0
+ * @date        2026-05-19
+ * @version     1.3.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 
@@ -449,14 +450,14 @@ extern "C" {
         }
         if (rpdata->object_property == PROP_FIRMWARE_REVISION) {
             static BACNET_CHARACTER_STRING fw;
-            characterstring_init_ansi(&fw, "1.2.0");
+            characterstring_init_ansi(&fw, "1.3.0");
             rpdata->application_data_len =
                 encode_application_character_string(rpdata->application_data, &fw);
             return rpdata->application_data_len;
         }
         if (rpdata->object_property == PROP_APPLICATION_SOFTWARE_VERSION) {
             static BACNET_CHARACTER_STRING asv;
-            characterstring_init_ansi(&asv, "1.2.0");
+            characterstring_init_ansi(&asv, "1.3.0");
             rpdata->application_data_len =
                 encode_application_character_string(rpdata->application_data, &asv);
             return rpdata->application_data_len;
@@ -600,6 +601,25 @@ extern "C" {
 // PUBLIC INIT
 // ==============================================================================
 
+/**
+ * @brief Converts a dotted-decimal subnet mask to a CIDR prefix length.
+ * @details Counts contiguous leading set bits in the 32-bit mask.
+ *          Returns 24 on degenerate input (zero mask or non-contiguous bits)
+ *          so BACnet broadcast always falls back to a safe /24 assumption.
+ * @param  mask  Subnet mask as returned by WiFi.subnetMask() or WiFi.softAPSubnetMask().
+ * @return CIDR prefix length in the range [1, 30], or 24 on error.
+ */
+static uint8_t _subnet_prefix_from_mask(IPAddress mask) {
+    uint32_t m = ((uint32_t)mask[0] << 24) |
+                 ((uint32_t)mask[1] << 16) |
+                 ((uint32_t)mask[2] <<  8) |
+                  (uint32_t)mask[3];
+    uint8_t prefix = 0;
+    while (m & 0x80000000U) { prefix++; m <<= 1; }
+    if (prefix == 0 || prefix > 30) return 24;
+    return prefix;
+}
+
 void bacnet_init(IPAddress ip, const String& deviceName) {
     current_bacnet_ip = ip;
 
@@ -646,7 +666,22 @@ void bacnet_init(IPAddress ip, const String& deviceName) {
     local_addr.address[3] = ip[3];
     local_addr.port = BACNET_PORT;
     bip_set_addr(&local_addr);
-    bip_set_subnet_prefix(24);
+
+    // Derive subnet prefix from the live network mask rather than assuming /24.
+    // AP mode always assigns 192.168.4.0/24 on ESP32, so hardcode prefix=24 there.
+    // STA mode reads the DHCP-assigned mask; fallback to 24 if not yet available.
+    uint8_t subnetPrefix;
+    if (WiFi.getMode() & WIFI_AP) {
+        subnetPrefix = 24;
+    } else {
+        subnetPrefix = _subnet_prefix_from_mask(WiFi.subnetMask());
+    }
+    bip_set_subnet_prefix(subnetPrefix);
+    if (WiFi.getMode() & WIFI_AP) {
+        log_printf("BACNET", "Subnet prefix: /%u (AP mode default)", subnetPrefix);
+    } else {
+        log_printf("BACNET", "Subnet prefix: /%u (mask %s)", subnetPrefix, WiFi.subnetMask().toString().c_str());
+    }
 
     if (!bip_init(NULL)) {
         log_print("BACNET", "ERROR: BIP stack init failed");
@@ -698,10 +733,6 @@ void bacnet_task() {
     // Process incoming UDP packets
     uint16_t pdu_len = bip_receive(&src, pdu, MAX_APDU, 0);
     if (pdu_len > 0) {
-        #ifdef ENABLE_MODBUS
-        extern ModbusIP mb;
-        mb.task();
-        #endif
         npdu_handler(&src, pdu, pdu_len);
     }
 

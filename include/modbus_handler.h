@@ -3,8 +3,8 @@
  * @brief       Modbus TCP Server (Slave) stack declarations.
  * @details     Synchronizes Modbus registers (Coils/Holding) with the global state structure.
  * @author      Doodz (DoodzProg)
- * @date        2026-04-04
- * @version     1.0.0
+ * @date        2026-05-19
+ * @version     1.3.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 

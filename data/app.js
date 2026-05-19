@@ -21,8 +21,8 @@
  *              front-end (rendering, UI state, styles).
  *
  * @author      Doodz (DoodzProg)
- * @date        2026-04-16
- * @version     1.2.0
+ * @date        2026-05-19
+ * @version     1.3.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 
@@ -1282,8 +1282,8 @@ function openNetModal() {
             <div class="form-group" style="margin-top:10px;">
                 <label class="form-label">PASSWORD</label>
                 <input type="password" id="wifiPass" class="input-field"
-                       placeholder="Wi-Fi password" style="margin-top:4px;"
-                       value="${escAttr(sysData.staPASS || '')}">
+                       placeholder="${sysData.hasSTAPass ? 'Leave blank to keep current password' : 'Wi-Fi password'}"
+                       style="margin-top:4px;">
             </div>
             <div class="net-warning">
                 ${ICON_WARN}
@@ -1302,8 +1302,8 @@ function openNetModal() {
             <div class="form-group" style="margin-top:10px;">
                 <label class="form-label">ACCESS POINT PASSWORD</label>
                 <input type="text" id="apPassInput" class="input-field"
-                       style="margin-top:4px;"
-                       value="${escAttr(sysData.apPASS || '')}">
+                       placeholder="${sysData.hasAPPass ? 'Leave blank to keep current password' : 'Minimum 8 characters'}"
+                       style="margin-top:4px;">
             </div>
             <div class="net-warning">
                 ${ICON_WARN}
@@ -1351,44 +1351,61 @@ function closeNetModal() {
 /**
  * @brief Triggers a Wi-Fi network scan and populates the SSID selector.
  *
- * @param {HTMLButtonElement} btn - The Scan button element (used for
- *                                  loading state feedback).
+ * @details The server runs the scan asynchronously to avoid blocking its main loop.
+ *          This function polls /api/scan every second until the server responds with
+ *          a 200 (scan complete) instead of a 202 (scan in progress).
+ *
+ * @param {HTMLButtonElement} btn - The Scan button element (used for loading state feedback).
  */
 function scanWifi(btn) {
-    btn.disabled   = true;
-    btn.innerHTML  = `
+    const SCAN_ICON_SPIN = `
         <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor"
              stroke-width="2" fill="none" class="spin">
             <polyline points="23 4 23 10 17 10"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-        </svg>
-        Scanning…`;
+        </svg>`;
+    const SCAN_ICON_IDLE = `
+        <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor"
+             stroke-width="2" fill="none">
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>`;
 
-    fetch('/api/scan')
-        .then(r => r.json())
-        .then(nets => {
-            const sel = document.getElementById('wifiSelect');
-            if (!sel) return;
-            sel.innerHTML = '';
-            nets.forEach(n => {
-                const opt = document.createElement('option');
-                opt.value = n.ssid;
-                opt.text  = `${n.ssid}  (${n.rssi} dBm)`;
-                sel.add(opt);
+    btn.disabled  = true;
+    btn.innerHTML = `${SCAN_ICON_SPIN} Scanning…`;
+
+    function poll() {
+        fetch('/api/scan')
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'scanning') {
+                    setTimeout(poll, 1000);
+                    return;
+                }
+                if (data.status === 'error') {
+                    btn.disabled  = false;
+                    btn.innerText = 'Scan Error';
+                    return;
+                }
+                // data is the results array
+                const sel = document.getElementById('wifiSelect');
+                if (!sel) return;
+                sel.innerHTML = '';
+                data.forEach(n => {
+                    const opt = document.createElement('option');
+                    opt.value = n.ssid;
+                    opt.text  = `${n.ssid}  (${n.rssi} dBm)`;
+                    sel.add(opt);
+                });
+                btn.disabled  = false;
+                btn.innerHTML = `${SCAN_ICON_IDLE} Scan`;
+            })
+            .catch(() => {
+                btn.disabled  = false;
+                btn.innerText = 'Scan Error';
             });
-            btn.disabled  = false;
-            btn.innerHTML = `
-                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor"
-                     stroke-width="2" fill="none">
-                    <polyline points="23 4 23 10 17 10"/>
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                </svg>
-                Scan`;
-        })
-        .catch(() => {
-            btn.disabled  = false;
-            btn.innerText = 'Scan Error';
-        });
+    }
+    poll();
 }
 
 /**
@@ -1406,14 +1423,14 @@ function saveAndSwitch(mode) {
         const pass = document.getElementById('wifiPass')?.value   || '';
         body = { mode: 'wifi', ssid, pass };
 
-        // Build the link the user will use after reconnecting to the enterprise network
-        const mdns = sysData.deviceName
-            ? `http://bms-${sysData.deviceName.toLowerCase()}.local`
-            : `http://${sysData.espIP}`;
+        // Build the link the user will use after reconnecting to the enterprise network.
+        // Fall back to 'gateway' when deviceName is not yet set in NVS (first boot).
+        const hostSlug = sysData.deviceName ? sysData.deviceName.toLowerCase() : 'gateway';
+        const mdns     = `http://bms-${hostSlug}.local`;
         reconnectHint = `
             Reconnect to your enterprise network, then access the device at:<br>
-            <a href="${mdns}" target="_blank"
-               style="color:var(--color-bar);text-decoration:underline;">${mdns}</a>`;
+            <a href="${escAttr(mdns)}" target="_blank"
+               style="color:var(--color-bar);text-decoration:underline;">${escHtml(mdns)}</a>`;
     } else {
         const apSsid = document.getElementById('apSsidInput')?.value || '';
         const apPass = document.getElementById('apPassInput')?.value  || '';
@@ -1423,10 +1440,10 @@ function saveAndSwitch(mode) {
             ? `http://bms-${sysData.deviceName.toLowerCase()}.local`
             : 'http://192.168.4.1';
         reconnectHint = `
-            Connect to the Wi-Fi network <strong>${apSsid || 'BMS-Gateway-Config'}</strong>,
+            Connect to the Wi-Fi network <strong>${escHtml(apSsid || 'BMS-Gateway-Config')}</strong>,
             then access the device at:<br>
-            <a href="${apMdns}" target="_blank"
-               style="color:var(--color-bar);text-decoration:underline;">${apMdns}</a>`;
+            <a href="${escAttr(apMdns)}" target="_blank"
+               style="color:var(--color-bar);text-decoration:underline;">${escHtml(apMdns)}</a>`;
     }
 
     document.getElementById('netModalBody').innerHTML = `
@@ -1444,8 +1461,20 @@ function saveAndSwitch(mode) {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(body)
-    }).finally(() => {
+    }).then(() => {
         setTimeout(() => window.location.reload(), 12000);
+    }).catch(() => {
+        document.getElementById('netModalBody').innerHTML = `
+            <div style="text-align:center;padding:24px 0;">
+                <p style="font-size:14px;font-weight:700;color:var(--color-alarm);">
+                    Request failed — the device may have already rebooted.
+                </p>
+                <p style="font-size:12px;margin-top:10px;line-height:1.7;">
+                    If the device does not come back within 30 seconds, press the hardware
+                    reset button and reconnect.
+                </p>
+            </div>`;
+        setTimeout(() => window.location.reload(), 15000);
     });
 }
 
@@ -1460,6 +1489,10 @@ function saveDeviceName() {
     const name = (document.getElementById('deviceNameInput')?.value || '').trim();
     if (!name) { alert('Device name cannot be empty.'); return; }
     if (name.length > 32) { alert('Device name must be 32 characters or fewer.'); return; }
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+        alert('Device name may only contain letters, digits, hyphens, and underscores.');
+        return;
+    }
 
     fetch('/api/device/name', {
         method: 'POST',
@@ -1468,6 +1501,7 @@ function saveDeviceName() {
     })
     .then(r => r.json())
     .then(() => {
+        const savedMdns = `http://bms-${name.toLowerCase()}.local`;
         document.getElementById('netModalBody').innerHTML = `
             <div style="text-align:center;padding:24px 0;">
                 <p style="font-size:14px;font-weight:700;color:var(--color-temp);">
@@ -1475,10 +1509,10 @@ function saveDeviceName() {
                 </p>
                 <p style="font-size:12px;margin-top:8px;">
                     The device will be available at
-                    <a href="http://bms-${name.toLowerCase()}.local"
+                    <a href="${escAttr(savedMdns)}"
                        target="_blank"
                        style="color:var(--color-bar);text-decoration:underline;">
-                        http://bms-${name.toLowerCase()}.local
+                        ${escHtml(savedMdns)}
                     </a> after reboot.
                 </p>
             </div>`;

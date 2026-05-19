@@ -3,8 +3,8 @@
  * @brief       Embedded Web Server and REST API declarations.
  * @details     Handles the user interface, Wi-Fi scanning, and persistent network configuration via LittleFS.
  * @author      Doodz (DoodzProg)
- * @date        2026-04-04
- * @version     1.0.0
+ * @date        2026-05-19
+ * @version     1.3.0
  * @repository  https://github.com/DoodzProg/ESP32-BMS-Gateway-Multi-Protocol
  */
 
